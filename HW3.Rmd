@@ -1,0 +1,81 @@
+---
+title: "HW3 - Mapping"
+author: "Ryan Rogala"
+output: html_document
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+  encoding=encoding,
+  output_file=file.path(dirname(input_file), out_dir, 'index.html'))
+  })
+---
+
+### Data Source  
+The data is sourced from the R package *tidycensus*, which uses data from the US Census Bureau. From this data set, we are interested in two field, total housing units and total vacant housing units per state. Using these two field, we can calculate a per-state vacancy housing unit rate.     
+
+### Spatial Units  
+The geographical units in this plot are US main-land states. Each state has its housing unit vacancy rate calculated as $vacancy\ rate\ = \frac{number\ of\ vacant\ units}{number\ of\ total\ units}$. 
+
+### Communicated in the Plot  
+THis plot communicates the rate in which housing units are vacant in each US main-land state. Since the majority of states have similar vacancy levels, those few with relatively high vacancy rates stand out, the larges being *Main* at almost $23$%.  
+
+### Design Decisions  
+A vacancy rate was used instead of a total vacancy measure so that metrics were comparable across states. The US map plot was chose because it is clean and simple to visualize for the reader. The color set *blue* was used because it has a good level of contrast to highlights low, average, and high vacancy rates while not having too much contrast in color. The darkest colors in this color set are blue and purple, which stand out against the lows rates (yellow) and averages (green). Since the higher levels of vacancy are most interning, their dark color makes them stand out to the reader. Vacancy rates are displayed when hovering over a given state, this allows the reader to see the actual vacancy rate per state.  
+
+```{r, message=FALSE, warning=FALSE, error = FALSE}
+#load packages from library. 
+library(tidycensus)
+library(censusapi)
+library(tidyverse)
+library(maps)
+library(ggdendro)
+library(ggplot2)
+library(mapproj)
+library(viridis)
+library(plotly)
+```
+
+```{r, warning=FALSE, message=FALSE, error=FALSE}
+#pull data.  
+state_df <- get_decennial(geography = "state", 
+                           variables = c("H001001","H003003"), 
+                           year = 2010)
+
+#split data by variable.  
+state_df_total <- state_df %>% filter(variable=="H001001")
+state_df_vac <- state_df %>% filter(variable=="H003003")
+
+#join data sets based on state.   
+df <- state_df_total %>% 
+  left_join(state_df_vac, by = c('GEOID','NAME')) %>%
+  mutate(`Vacancy Rate` = round(value.y / value.x, 3)) %>%
+  select(GEOID, NAME, `Vacancy Rate`)
+```
+
+```{r}
+# join vacancy data to map data. 
+full_df <- 
+map_data("state") %>%
+  mutate(region = str_to_title(region),
+         subregion = str_to_title(subregion)) %>% 
+  left_join(df, by = c("region" = "NAME"))
+```
+
+```{r}
+#plot map with vacancy data. 
+p_vac <- 
+  ggplot(data = full_df,
+            mapping = aes(x = long, y = lat,
+                          group = group, 
+                          fill = `Vacancy Rate`)) + 
+  geom_polygon(color="white") + 
+  theme_dendro() + 
+  scale_fill_viridis("Blue", direction=-1) + 
+  guides(fill=guide_legend(title="Unit Vacancy Rate")) + 
+  coord_map() +
+  ggtitle("Unit Housing Vacancy Rate by State")  
+
+#plot data 
+ggplotly(p_vac)
+```
+
